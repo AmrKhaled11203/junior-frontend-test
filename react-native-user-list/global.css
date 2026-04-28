@@ -1,0 +1,14 @@
+@tailwind utilities;
+
+/* Web-specific layout resets */
+html, body, #root, [data-reactroot] {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#root > div {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}

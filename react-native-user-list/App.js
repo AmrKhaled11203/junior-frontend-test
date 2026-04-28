@@ -1,4 +1,4 @@
-import React from 'react';
+import "./global.css";
 import { Provider } from 'react-redux';
 import store from './src/redux/store';
 import UserListScreen from './src/screens/UserListScreen';

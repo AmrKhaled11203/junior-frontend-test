@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "react-native-user-list",
-    "slug": "react-native-user-list",
+    "name": "User List",
+    "slug": "user-list",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,17 +13,26 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.amrkhaled.userlist"
     },
     "android": {
+      "package": "com.amrkhaled.userlist",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "usesCleartextTraffic": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro",
+      "favicon": "./assets/icon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8618745f-305f-41e7-9362-ca970d80d6ff"
+      }
     }
   }
 }

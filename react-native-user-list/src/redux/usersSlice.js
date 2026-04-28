@@ -1,17 +1,41 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import client from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
+const API_URL = 'https://jsonplaceholder.typicode.com/users';
 const USERS_CACHE_KEY = '@users_cache';
+
+// Helper: fetch with retry
+const fetchWithRetry = async (url, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`[API] Attempt ${i + 1} on ${Platform.OS}...`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (err) {
+      console.error(`[API] Attempt ${i + 1} failed: ${err.message}`);
+      if (i === retries - 1) throw err;
+      // Wait 1 second before retrying
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+};
 
 // Async thunk to fetch users
 export const fetchUsers = createAsyncThunk(
   'users/fetchUsers',
   async ({ page, limit }, { rejectWithValue }) => {
     try {
-      const response = await client.get(`/users?_page=${page}&_limit=${limit}`);
-      return { users: response.data, page };
+      const url = `${API_URL}?_page=${page}&_limit=${limit}`;
+      console.log(`[API] Fetching: ${url}`);
+      const data = await fetchWithRetry(url);
+      console.log(`[API] Success! Received ${data.length} users on ${Platform.OS}`);
+      return { users: data, page };
     } catch (error) {
+      console.error(`[API] Final failure on ${Platform.OS}: ${error.message}`);
       return rejectWithValue(error.message);
     }
   }
@@ -54,6 +78,7 @@ const usersSlice = createSlice({
       .addCase(fetchUsers.fulfilled, (state, action) => {
         state.status = 'succeeded';
         const { users, page } = action.payload;
+        console.log(`[REDUX] Action fulfilled. Page: ${page}, Count: ${users.length}`);
         
         if (users.length === 0) {
           state.hasMore = false;
