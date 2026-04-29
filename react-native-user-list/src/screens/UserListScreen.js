@@ -4,10 +4,13 @@ import {
   FlatList, 
   StatusBar,
   Text,
-  TouchableOpacity
+  TouchableOpacity,
+  Platform,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
+import { fetch as expoFetch } from 'expo/fetch';
 import { fetchUsers, loadCachedUsers, setSearchQuery, resetUsers } from '../redux/usersSlice';
 
 // Components
@@ -21,6 +24,7 @@ const UserListScreen = () => {
   const dispatch = useDispatch();
   const { users, status, page, hasMore, searchQuery, error } = useSelector((state) => state.users);
   const [refreshing, setRefreshing] = useState(false);
+  const [diagResult, setDiagResult] = useState('');
 
   useEffect(() => {
     dispatch(loadCachedUsers());
@@ -37,6 +41,35 @@ const UserListScreen = () => {
     if (status !== 'loading' && hasMore) {
       dispatch(fetchUsers({ page: page + 1, limit: 6 }));
     }
+  };
+
+  // Network diagnostic — tests global fetch vs expo/fetch
+  const runDiagnostic = async () => {
+    setDiagResult('Testing...');
+    const results = [];
+
+    // Test 1: expo/fetch (what we use now)
+    try {
+      const r = await expoFetch('https://jsonplaceholder.typicode.com/users/1');
+      const data = await r.json();
+      results.push(`✅ expo/fetch: ${data.name}`);
+    } catch (e) {
+      results.push(`❌ expo/fetch: ${e.message}`);
+    }
+
+    // Test 2: global fetch
+    try {
+      const r = await globalThis.fetch('https://jsonplaceholder.typicode.com/users/1');
+      const data = await r.json();
+      results.push(`✅ global fetch: ${data.name}`);
+    } catch (e) {
+      results.push(`❌ global fetch: ${e.message}`);
+    }
+
+    results.push(`📱 Platform: ${Platform.OS} ${Platform.Version || ''}`);
+    const resultText = results.join('\n');
+    setDiagResult(resultText);
+    Alert.alert('Network Diagnostic', resultText);
   };
 
   const filteredUsers = users.filter(user => 
@@ -79,12 +112,23 @@ const UserListScreen = () => {
                 {status === 'failed' ? `ERROR: ${error || 'FETCH FAILED'}` : 'NO USERS FOUND'}
               </Text>
               {status === 'failed' && (
-                <TouchableOpacity 
-                  className="mt-4 bg-neo-primary px-4 py-2 border-neo-thin border-neo-black"
-                  onPress={onRefresh}
-                >
-                  <Text className="text-white font-bold">RETRY</Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity 
+                    className="mt-4 bg-neo-primary px-4 py-2 border-neo-thin border-neo-black"
+                    onPress={onRefresh}
+                  >
+                    <Text className="text-white font-bold">RETRY</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="mt-3 bg-yellow-500 px-4 py-2 border-neo-thin border-neo-black"
+                    onPress={runDiagnostic}
+                  >
+                    <Text className="text-black font-bold">🔍 DIAGNOSE NETWORK</Text>
+                  </TouchableOpacity>
+                  {diagResult !== '' && (
+                    <Text className="mt-3 text-xs text-gray-600 font-mono">{diagResult}</Text>
+                  )}
+                </>
               )}
             </View>
           )
