@@ -5,10 +5,8 @@ const store = configureStore({
   reducer: {
     users: usersReducer,
   },
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: false,
-    }),
+  // All state values are serializable (strings, numbers, plain objects/arrays),
+  // so we keep the default middleware checks enabled for bug detection.
 });
 
 export default store;

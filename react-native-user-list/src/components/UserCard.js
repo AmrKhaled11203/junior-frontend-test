@@ -1,7 +1,13 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { User as UserIcon, Mail, ChevronRight } from 'lucide-react-native';
+import { formatAddress } from '../utils/formatAddress';
 
+/**
+ * UserCard — Reusable card displaying user info.
+ * Wrapped in React.memo to prevent unnecessary re-renders in FlatList.
+ * Displays: name, username, company, email, website, and formatted address.
+ */
 const UserCard = ({ user }) => {
   return (
     <TouchableOpacity 
@@ -35,8 +41,11 @@ const UserCard = ({ user }) => {
             </View>
           </View>
 
+          {/* Address: combined street, city, zipcode per spec */}
           <View className="self-start bg-neo-black px-2 py-0.5 border border-neo-black">
-            <Text className="text-white text-[10px] font-[900] uppercase tracking-widest">{user.address.city}</Text>
+            <Text className="text-white text-[10px] font-[900] uppercase tracking-widest">
+              {formatAddress(user.address)}
+            </Text>
           </View>
         </View>
         <ChevronRight color="black" size={20} />
@@ -45,4 +54,4 @@ const UserCard = ({ user }) => {
   );
 };
 
-export default UserCard;
+export default React.memo(UserCard);

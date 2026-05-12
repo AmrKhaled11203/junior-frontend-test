@@ -1,16 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { 
   View, 
   FlatList, 
   StatusBar,
   Text,
   TouchableOpacity,
-  Platform,
-  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetch as expoFetch } from 'expo/fetch';
 import { fetchUsers, loadCachedUsers, setSearchQuery, resetUsers } from '../redux/usersSlice';
 
 // Components
@@ -20,62 +17,89 @@ import UserCard from '../components/UserCard';
 import LoadMoreButton from '../components/LoadMoreButton';
 import ScreenFooter from '../components/ScreenFooter';
 
+const ITEMS_PER_PAGE = 5;
+
 const UserListScreen = () => {
   const dispatch = useDispatch();
   const { users, status, page, hasMore, searchQuery, error } = useSelector((state) => state.users);
   const [refreshing, setRefreshing] = useState(false);
-  const [diagResult, setDiagResult] = useState('');
 
+  // Load cached data first, then fetch fresh data from API
   useEffect(() => {
     dispatch(loadCachedUsers());
-    dispatch(fetchUsers({ page: 1, limit: 6 }));
+    dispatch(fetchUsers({ page: 1, limit: ITEMS_PER_PAGE }));
   }, [dispatch]);
 
-  const onRefresh = useCallback(() => {
+  // Pull-to-refresh with proper error handling via unwrap()
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     dispatch(resetUsers());
-    dispatch(fetchUsers({ page: 1, limit: 6 })).finally(() => setRefreshing(false));
+    try {
+      await dispatch(fetchUsers({ page: 1, limit: ITEMS_PER_PAGE })).unwrap();
+    } catch {
+      // Error is already handled by the rejected case in the slice
+    } finally {
+      setRefreshing(false);
+    }
   }, [dispatch]);
 
-  const handleLoadMore = () => {
+  // Load more — only if not already loading and more pages exist
+  const handleLoadMore = useCallback(() => {
     if (status !== 'loading' && hasMore) {
-      dispatch(fetchUsers({ page: page + 1, limit: 6 }));
+      dispatch(fetchUsers({ page: page + 1, limit: ITEMS_PER_PAGE }));
     }
-  };
+  }, [dispatch, status, hasMore, page]);
 
-  // Network diagnostic — tests global fetch vs expo/fetch
-  const runDiagnostic = async () => {
-    setDiagResult('Testing...');
-    const results = [];
+  // Search handler passed to SearchBar (already debounced inside SearchBar)
+  const handleSearch = useCallback((text) => {
+    dispatch(setSearchQuery(text));
+  }, [dispatch]);
 
-    // Test 1: expo/fetch (what we use now)
-    try {
-      const r = await expoFetch('https://jsonplaceholder.typicode.com/users/1');
-      const data = await r.json();
-      results.push(`✅ expo/fetch: ${data.name}`);
-    } catch (e) {
-      results.push(`❌ expo/fetch: ${e.message}`);
-    }
+  // Memoized filtered list — only re-computes when users or searchQuery change
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users;
+    const query = searchQuery.toLowerCase();
+    return users.filter(user =>
+      user.name.toLowerCase().includes(query) ||
+      user.email.toLowerCase().includes(query)
+    );
+  }, [users, searchQuery]);
 
-    // Test 2: global fetch
-    try {
-      const r = await globalThis.fetch('https://jsonplaceholder.typicode.com/users/1');
-      const data = await r.json();
-      results.push(`✅ global fetch: ${data.name}`);
-    } catch (e) {
-      results.push(`❌ global fetch: ${e.message}`);
-    }
+  // Extracted renderItem with useCallback to avoid creating a new function on each render
+  const renderItem = useCallback(({ item }) => <UserCard user={item} />, []);
 
-    results.push(`📱 Platform: ${Platform.OS} ${Platform.Version || ''}`);
-    const resultText = results.join('\n');
-    setDiagResult(resultText);
-    Alert.alert('Network Diagnostic', resultText);
-  };
+  // Key extractor — stable reference
+  const keyExtractor = useCallback((item) => item.id.toString(), []);
 
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Memoized footer to prevent re-creating the component reference each render
+  const listFooter = useMemo(() => (
+    <LoadMoreButton 
+      loading={status === 'loading'}
+      hasMore={hasMore}
+      show={filteredUsers.length > 0 && searchQuery === ''}
+      onPress={handleLoadMore}
+    />
+  ), [status, hasMore, filteredUsers.length, searchQuery, handleLoadMore]);
+
+  // Memoized empty state
+  const listEmpty = useMemo(() => {
+    if (status === 'loading') return null;
+    return (
+      <View className="p-10 items-center">
+        <Text className="text-base font-[900] text-gray-400 italic">
+          {status === 'failed' ? `ERROR: ${error || 'FETCH FAILED'}` : 'NO USERS FOUND'}
+        </Text>
+        {status === 'failed' && (
+          <TouchableOpacity 
+            className="mt-4 bg-neo-primary px-4 py-2 border-neo-thin border-neo-black"
+            onPress={onRefresh}
+          >
+            <Text className="text-white font-bold">RETRY</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }, [status, error, onRefresh]);
 
   return (
     <SafeAreaView className="flex-1 bg-neo-surface">
@@ -85,54 +109,25 @@ const UserListScreen = () => {
 
       <SearchBar 
         value={searchQuery} 
-        onChangeText={(text) => dispatch(setSearchQuery(text))} 
+        onChangeText={handleSearch} 
       />
 
       <FlatList
         className="flex-1"
         style={{ flex: 1 }}
         data={filteredUsers}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => <UserCard user={item} />}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         contentContainerStyle={{ padding: 20, paddingTop: 0 }}
         refreshing={refreshing}
         onRefresh={onRefresh}
-        ListFooterComponent={() => (
-          <LoadMoreButton 
-            loading={status === 'loading'}
-            hasMore={hasMore}
-            show={filteredUsers.length > 0 && searchQuery === ''}
-            onPress={handleLoadMore}
-          />
-        )}
-        ListEmptyComponent={() => (
-          status !== 'loading' && (
-            <View className="p-10 items-center">
-              <Text className="text-base font-[900] text-gray-400 italic">
-                {status === 'failed' ? `ERROR: ${error || 'FETCH FAILED'}` : 'NO USERS FOUND'}
-              </Text>
-              {status === 'failed' && (
-                <>
-                  <TouchableOpacity 
-                    className="mt-4 bg-neo-primary px-4 py-2 border-neo-thin border-neo-black"
-                    onPress={onRefresh}
-                  >
-                    <Text className="text-white font-bold">RETRY</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    className="mt-3 bg-yellow-500 px-4 py-2 border-neo-thin border-neo-black"
-                    onPress={runDiagnostic}
-                  >
-                    <Text className="text-black font-bold">🔍 DIAGNOSE NETWORK</Text>
-                  </TouchableOpacity>
-                  {diagResult !== '' && (
-                    <Text className="mt-3 text-xs text-gray-600 font-mono">{diagResult}</Text>
-                  )}
-                </>
-              )}
-            </View>
-          )
-        )}
+        ListFooterComponent={listFooter}
+        ListEmptyComponent={listEmpty}
+        // FlatList performance optimizations
+        initialNumToRender={8}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       <ScreenFooter />
